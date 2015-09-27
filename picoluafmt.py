@@ -12,6 +12,75 @@ class Error(Exception):
     """Base class for local exceptions."""
     pass
 
+class Pos():
+    def __init__(self, lineno=0, charno=0):
+        self.lineno = lineno
+        self.charno = charno
+
+    def next(self, chars):
+        for char in chars:
+            if char == '\n':
+                self.lineno += 1
+                self.charno = -1
+            else:
+                self.charno += 1
+        return chars
+
+    def copy(self):
+        return Pos(lineno=self.lineno, charno=self.charno)
+            
+    def __str__(self):
+        return 'line {}, pos {}'.format(self.lineno+1, self.charno+1)
+
+class LexerError(Exception):
+    """A lexer error."""
+    def __init__(self, msg, pos):
+        self.msg = msg
+        self.pos = pos
+        
+    def __str__(self):
+        return '{} at {}'.format(self.msg, self.pos)
+
+STRING_ESCAPES = {
+    '\n': '\n',
+    'a': '\a',
+    'b': '\b',
+    'f': '\f',
+    'n': '\n',
+    'r': '\r',
+    't': '\t',
+    'v': '\v',
+    '\\': '\\',
+    '"': '"',
+    "'": "'"
+}
+
+class Token():
+    """Base class for tokens."""
+    def __init__(self, pos, data):
+        self.pos = pos
+        self.data = data
+    def __str__(self):
+        return '{}<{}, {}>'.format(
+            self.__class__.__name__, self.pos, self.data)
+
+class TokString(Token):
+    """A string literal."""
+    pass
+
+class TokComment(Token):
+    """A comment."""
+    pass
+
+class TokName(Token):
+    """A name."""
+    pass
+
+TOKEN_MATCHERS = (
+    (re.compile(r'--.*'), TokComment),
+    (re.compile(r'\w+'), None),
+    (re.compile(r'[a-zA-Z_][a-zA-Z0-9_]*'), TokName)
+)
 
 class LuaParser():
     """The Lua parser and formatter.
@@ -23,13 +92,87 @@ class LuaParser():
     lines that have been processed do not represent a complete and
     valid Lua code unit is an error.
     """
-    
+
     def __init__(self):
         """The initializer."""
-        # TODO: real implementation
-        self._lines = []
+        self._tokens = []
+        self._tokenpos = Pos()
 
-    def process_line(self, line):
+        # If in a string literal, the pos of the start of the string.
+        self._in_string_pos = None
+        # If in a string literal, a list of (escaped) chars. Else None.
+        self._in_string = None
+        # If in a string literal, the starting delimiter, either " or '.
+        # Else None.
+        self._in_string_delim = None
+        
+    def _process_token(self, s):
+        """Process a token's worth of chars from a string, if possible.
+
+        If a token is found, it is added to self._tokens. A call might
+        process characters but not emit a token.
+
+        Args:
+          s: The string to process.
+
+        Returns:
+          The number of characters processed from the beginning of the string.
+        """
+        i = 0
+        
+        if self.in_string is not None:
+            # Continue string literal.
+            while i < len(s):
+                c = s[i]
+
+                if c == self._in_string_delim:
+                    # End string literal.
+                    self._tokens.append(
+                        TokString(self._in_string_pos,
+                                  str(''.join(self._in_string))))
+                    self._in_string_delim = None
+                    self._in_string_pos = None
+                    self._in_string = None
+                    i += 1
+                    break
+                
+                if c == '\\':
+                    # Escape character.
+                    num_m = re.match(r'\d{1,3}', s[i+1:])
+                    if num_m:
+                        c = chr(int(num_m.group(0)))
+                        i += len(num_m.group(0))
+                    else:
+                        next_c = s[i+1]
+                        if next_c in STRING_ESCAPES:
+                            c = STRING_ESCAPES[next_c]
+                            i += 1
+                            
+                self._in_string.append(c)
+                i += 1
+
+        elif s.startswith("'") or s.startswith('"'):
+            # Begin string literal.
+            self._in_string_delim = s[0]
+            self._in_string_pos = self._tokenpos.copy()
+            self._in_string = []
+            i = 1
+
+        else:
+            # Match one-line patterns.
+            for (pat, tok_class) in TOKEN_MATCHERS:
+                m = pat.match(s)
+                if m:
+                    if tok_class is not None:
+                        self._tokens.append(
+                            tok_class(self._tokenpos, m.group(0)))
+                    i = len(m.group(0))
+                    break
+           
+        self._tokenpos.next(s[:i])
+        return i
+
+    def process_line(self, line_str):
         """Processes a line of Lua source code.
 
         The line does not have to be a complete Lua statement or
@@ -37,11 +180,14 @@ class LuaParser():
         processed before you can call a write_*() method.
 
         Args:
-          line: The line of Lua source.
-
+          line_str: The line of Lua source, as a unicode string.
         """
-        # TODO: implement this
-        self._lines.append(line)
+        i = -1
+        while i != 0:
+            i = self._process_token(line_str)
+            line_str = line_str[i:]
+        if line_str:
+            raise LexerError('Syntax error', self._tokenpos)
 
     def write_minified(self, outstr):
         """Writes a minified version of the processed Lua source to an output
@@ -55,11 +201,9 @@ class LuaParser():
           The number of characters written to outstr.
         """
         # TODO: implement this
-        charcount = 0
-        for line in self._lines:
-            outstr.write((b'M:' + line))
-            charcount += len(line) + 2
-        return charcount
+        for tok in self._tokens:
+            outstr.write(str(tok).encode())
+        return len(self._tokens)
 
     def write_formatted(self, outstr, indent_width=2):
         """Writes a formatted version of the processed Lua source to an output
@@ -75,11 +219,9 @@ class LuaParser():
           The number of characters written to outstr.
         """
         # TODO: implement this
-        charcount = 0
-        for line in self._lines:
-            outstr.write((b'F:' + line))
-            charcount += len(line) + 2
-        return charcount
+        for tok in self._tokens:
+            outstr.write(str(tok).encode())
+        return len(self._tokens)
 
     
 class BadP8Error(Error):
@@ -116,6 +258,11 @@ def process(instr, outstr,
       BadP8Error: expect_p8 was True and instr contained data that was not
         recognized as a valid .p8 file.
     """
+    # TODO: Pico-8 source files are small enough to load into
+    # memory. Maybe skip all this line reading garbage and just
+    # pattern match on the entire string.
+    # TODO: Consider a generator-based approach to lines->lexer->parser.
+    
     if expect_p8:
         # Validate header.
         header = [instr.readline(), instr.readline()]
@@ -145,11 +292,11 @@ def process(instr, outstr,
     lua_parser = LuaParser()
     orig_char_count = 0
     while True:
-        line = instr.readline()
-        if not line or (expect_p8 and re.match(rb'__\w+__\n', line)):
+        line_str = instr.readline().decode()
+        if not line_str or (expect_p8 and re.match(r'__\w+__\n', line_str)):
             break
-        lua_parser.process_line(line)
-        orig_char_count += len(line)
+        lua_parser.process_line(line_str)
+        orig_char_count += len(line_str)
     if minify:
         new_char_count = lua_parser.write_minified(
             outstr)
@@ -159,7 +306,7 @@ def process(instr, outstr,
 
     if expect_p8:
         # Write first post-__lua__ section line, if any.
-        outstr.write(line)
+        outstr.write(line_str.encode())
         
         # Copy to end of .p8 file.
         while line:

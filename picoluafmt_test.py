@@ -146,6 +146,8 @@ if (a ~= 2) print("ok") end
 
 
 class TestLuaParser(unittest.TestCase):
+    def testLexerWhitespace(self):
+        parser = picoluafmt.LuaParser()
     # TODO: implement this
     pass
 
