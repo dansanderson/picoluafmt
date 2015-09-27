@@ -172,7 +172,7 @@ class LuaParser():
         self._tokenpos.next(s[:i])
         return i
 
-    def process_line(self, line_str):
+    def process_line(self, line):
         """Processes a line of Lua source code.
 
         The line does not have to be a complete Lua statement or
@@ -180,13 +180,13 @@ class LuaParser():
         processed before you can call a write_*() method.
 
         Args:
-          line_str: The line of Lua source, as a unicode string.
+          line: The line of Lua source.
         """
         i = -1
         while i != 0:
-            i = self._process_token(line_str)
-            line_str = line_str[i:]
-        if line_str:
+            i = self._process_token(line)
+            line = line[i:]
+        if line:
             raise LexerError('Syntax error', self._tokenpos)
 
     def write_minified(self, outstr):
@@ -202,7 +202,7 @@ class LuaParser():
         """
         # TODO: implement this
         for tok in self._tokens:
-            outstr.write(str(tok).encode())
+            outstr.write(str(tok))
         return len(self._tokens)
 
     def write_formatted(self, outstr, indent_width=2):
@@ -220,7 +220,7 @@ class LuaParser():
         """
         # TODO: implement this
         for tok in self._tokens:
-            outstr.write(str(tok).encode())
+            outstr.write(str(tok))
         return len(self._tokens)
 
     
@@ -267,12 +267,12 @@ def process(instr, outstr,
         # Validate header.
         header = [instr.readline(), instr.readline()]
         first_m = re.match(
-            rb'pico-8 cartridge // http://www.pico-8.com\n',
+            r'pico-8 cartridge // http://www.pico-8.com\n',
             header[0])
         if not first_m:
             raise BadP8Error('invalid header')
         version_m = re.match(
-            rb'version (.*)\n',
+            r'version (.*)\n',
             header[1])
         if not version_m:
             raise BadP8Error('invalid header')
@@ -284,7 +284,7 @@ def process(instr, outstr,
         while True:
             line = instr.readline()
             outstr.write(line)
-            if not line or re.match(rb'__lua__\n', line):
+            if not line or re.match(r'__lua__\n', line):
                 break
         if not line:
             raise BadP8Error('no __lua__ section')
@@ -292,11 +292,11 @@ def process(instr, outstr,
     lua_parser = LuaParser()
     orig_char_count = 0
     while True:
-        line_str = instr.readline().decode()
-        if not line_str or (expect_p8 and re.match(r'__\w+__\n', line_str)):
+        line = instr.readline()
+        if not line or (expect_p8 and re.match(r'__\w+__\n', line)):
             break
-        lua_parser.process_line(line_str)
-        orig_char_count += len(line_str)
+        lua_parser.process_line(line)
+        orig_char_count += len(line)
     if minify:
         new_char_count = lua_parser.write_minified(
             outstr)
@@ -306,7 +306,7 @@ def process(instr, outstr,
 
     if expect_p8:
         # Write first post-__lua__ section line, if any.
-        outstr.write(line_str.encode())
+        outstr.write(line)
         
         # Copy to end of .p8 file.
         while line:
@@ -430,7 +430,7 @@ def main(orig_args):
 
         write_stream = sys.stderr
         (oc, nc) = process(
-            sys.stdin.buffer, sys.stdout.buffer,
+            sys.stdin, sys.stdout,
             expect_p8=True,
             minify=args.minify,
             indent_width=args.indentwidth)
@@ -458,9 +458,10 @@ def main(orig_args):
                 expect_p8 = False
             try:
                 tempname = None
-                with tempfile.NamedTemporaryFile(delete=False) as out_file:
+                with tempfile.NamedTemporaryFile(
+                        mode='wt', delete=False) as out_file:
                     tempname = out_file.name
-                    with open(filename, 'rb') as orig_file:
+                    with open(filename) as orig_file:
                         (oc, nc) = process(
                             orig_file, out_file,
                             expect_p8=expect_p8,

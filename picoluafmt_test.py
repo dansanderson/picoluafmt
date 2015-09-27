@@ -13,15 +13,15 @@ from unittest.mock import patch
 import picoluafmt
 
 
-VALID_P8_HEADER = b'''pico-8 cartridge // http://www.pico-8.com
+VALID_P8_HEADER = '''pico-8 cartridge // http://www.pico-8.com
 version 4
 '''
 
-INVALID_P8_HEADER = b'''INVALID HEADER
+INVALID_P8_HEADER = '''INVALID HEADER
 INVALID HEADER
 '''
 
-VALID_P8_LUA_SECTION_HEADER = b'__lua__\n'
+VALID_P8_LUA_SECTION_HEADER = '__lua__\n'
 
 VALID_P8_FOOTER = (
     '\n__gfx__\n' + (('0' * 128) + '\n') * 128 +
@@ -29,9 +29,9 @@ VALID_P8_FOOTER = (
     '__map__\n' + (('0' * 256) + '\n') * 32 +
     '__sfx__\n' + '0001' + ('0' * 164) + '\n' +
     ('001' + ('0' * 165) + '\n') * 63 +
-    '__music__\n' + '00 41424344\n' * 64 + '\n\n').encode()
+    '__music__\n' + '00 41424344\n' * 64 + '\n\n')
 
-VALID_LUA = b'''
+VALID_LUA = '''
 v1 = nil
 v2 = false
 v3 = true
@@ -157,9 +157,9 @@ class TestLuaParser(unittest.TestCase):
 @patch.object(picoluafmt.LuaParser, 'write_minified')
 class TestProcessStream(unittest.TestCase):
     def testProcessEmptyLua(self, mock_write_minified, mock_write_formatted, mock_process_line):
-        outstr = io.BytesIO()
+        outstr = io.StringIO()
         (oc, nc) = picoluafmt.process(
-            io.BytesIO(b''),
+            io.StringIO(''),
             outstr
         )
         mock_process_line.assert_not_called()
@@ -168,9 +168,9 @@ class TestProcessStream(unittest.TestCase):
         mock_write_minified.assert_not_called()
 
     def testProcessLua(self, mock_write_minified, mock_write_formatted, mock_process_line):
-        outstr = io.BytesIO()
+        outstr = io.StringIO()
         (oc, nc) = picoluafmt.process(
-            io.BytesIO(VALID_LUA),
+            io.StringIO(VALID_LUA),
             outstr
         )
         self.assertTrue(mock_process_line.called)
@@ -179,9 +179,9 @@ class TestProcessStream(unittest.TestCase):
         mock_write_minified.assert_not_called()
         
     def testProcessLuaMinify(self, mock_write_minified, mock_write_formatted, mock_process_line):
-        outstr = io.BytesIO()
+        outstr = io.StringIO()
         (oc, nc) = picoluafmt.process(
-            io.BytesIO(VALID_LUA),
+            io.StringIO(VALID_LUA),
             outstr,
             minify=True
         )
@@ -191,9 +191,9 @@ class TestProcessStream(unittest.TestCase):
         mock_write_formatted.assert_not_called()
         
     def testProcessLuaIndentWidth(self, mock_write_minified, mock_write_formatted, mock_process_line):
-        outstr = io.BytesIO()
+        outstr = io.StringIO()
         (oc, nc) = picoluafmt.process(
-            io.BytesIO(VALID_LUA),
+            io.StringIO(VALID_LUA),
             outstr,
             indent_width=7
         )
@@ -203,9 +203,9 @@ class TestProcessStream(unittest.TestCase):
         mock_write_minified.assert_not_called()
         
     def testProcessP8EmptyLua(self, mock_write_minified, mock_write_formatted, mock_process_line):
-        outstr = io.BytesIO()
+        outstr = io.StringIO()
         (oc, nc) = picoluafmt.process(
-            io.BytesIO(VALID_P8_HEADER +
+            io.StringIO(VALID_P8_HEADER +
                         VALID_P8_LUA_SECTION_HEADER +
                         VALID_P8_FOOTER),
             outstr,
@@ -214,12 +214,12 @@ class TestProcessStream(unittest.TestCase):
         mock_write_formatted.assert_called_once_with(
             outstr, indent_width=2)
         mock_write_minified.assert_not_called()
-        self.assertIn(b'__gfx__\n', outstr.getvalue())
+        self.assertIn('__gfx__\n', outstr.getvalue())
 
     def testProcessP8(self, mock_write_minified, mock_write_formatted, mock_process_line):
-        outstr = io.BytesIO()
+        outstr = io.StringIO()
         (oc, nc) = picoluafmt.process(
-            io.BytesIO(VALID_P8_HEADER +
+            io.StringIO(VALID_P8_HEADER +
                         VALID_P8_LUA_SECTION_HEADER +
                         VALID_LUA +
                         VALID_P8_FOOTER),
@@ -229,14 +229,14 @@ class TestProcessStream(unittest.TestCase):
         mock_write_formatted.assert_called_once_with(
             outstr, indent_width=2)
         mock_write_minified.assert_not_called()
-        self.assertIn(b'__gfx__\n', outstr.getvalue())
+        self.assertIn('__gfx__\n', outstr.getvalue())
         
     def testErrorP8InvalidHeader(self, mock_write_minified, mock_write_formatted, mock_process_line):
-        outstr = io.BytesIO()
+        outstr = io.StringIO()
         self.assertRaises(
             picoluafmt.BadP8Error,
             picoluafmt.process,
-            io.BytesIO(INVALID_P8_HEADER +
+            io.StringIO(INVALID_P8_HEADER +
                         VALID_P8_LUA_SECTION_HEADER +
                         VALID_LUA +
                         VALID_P8_FOOTER),
@@ -245,19 +245,15 @@ class TestProcessStream(unittest.TestCase):
         )
         
     def testErrorP8MissingLua(self, mock_write_minified, mock_write_formatted, mock_process_line):
-        outstr = io.BytesIO()
+        outstr = io.StringIO()
         self.assertRaises(
             picoluafmt.BadP8Error,
             picoluafmt.process,
-            io.BytesIO(VALID_P8_HEADER +
+            io.StringIO(VALID_P8_HEADER +
                         VALID_P8_FOOTER),
             outstr,
             expect_p8=True
         )
-
-class BufferStreamWrapper():
-    def __init__(self):
-        self.buffer = io.BytesIO()
 
 @patch('picoluafmt.process', return_value=(111, 222))
 @patch('picoluafmt.write')
@@ -283,15 +279,15 @@ class TestMain(unittest.TestCase):
         picoluafmt.process.assert_not_called()
         self.assertIn('Usage:', mock_stdout.getvalue())
     
-    @patch('sys.stdin', new_callable=BufferStreamWrapper)
-    @patch('sys.stdout', new_callable=BufferStreamWrapper)
+    @patch('sys.stdin', new_callable=io.StringIO)
+    @patch('sys.stdout', new_callable=io.StringIO)
     def testMainProcessesStdin(
             self, mock_stdout, mock_stdin,
             mock_error, mock_write, mock_process):
         status = picoluafmt.main([])
         self.assertEqual(0, status)
         mock_process.assert_called_once_with(
-            mock_stdin.buffer, mock_stdout.buffer,
+            mock_stdin, mock_stdout,
             expect_p8=True, minify=False,
             indent_width=2)
 
