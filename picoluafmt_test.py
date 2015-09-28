@@ -186,7 +186,8 @@ class TestLuaParser(unittest.TestCase):
     # TODO: confirm the correct multi-line string behavior
     def testLexerStringMultipleLines(self):
         parser = picoluafmt.LuaParser()
-        parser.process_line('"abc def ghi \nand jkl"\n')
+        parser.process_line('"abc def ghi \n')
+        parser.process_line('and jkl"\n')
         self.assertEqual(1, len(parser._tokens))
         self.assertEqual(picoluafmt.TokString('abc def ghi \nand jkl'),
                          parser._tokens[0])
