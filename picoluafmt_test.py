@@ -148,9 +148,33 @@ if (a ~= 2) print("ok") end
 class TestLuaParser(unittest.TestCase):
     def testLexerWhitespace(self):
         parser = picoluafmt.LuaParser()
-    # TODO: implement this
-    pass
+        parser.process_line('    \n')
+        self.assertEqual(0, len(parser._tokens))
 
+    def testLexerOneKeyword(self):
+        parser = picoluafmt.LuaParser()
+        parser.process_line('and\n')
+        self.assertEqual(1, len(parser._tokens))
+        self.assertEqual('and', parser._tokens[0].data)
+        self.assertFalse(isinstance(parser._tokens[0],
+                                    picoluafmt.TokName))
+
+    def testLexerOneName(self):
+        parser = picoluafmt.LuaParser()
+        parser.process_line('android\n')
+        self.assertEqual(1, len(parser._tokens))
+        self.assertEqual('android', parser._tokens[0].data)
+        self.assertTrue(isinstance(parser._tokens[0],
+                                   picoluafmt.TokName))
+
+    def testLexerThreeDots(self):
+        parser = picoluafmt.LuaParser()
+        parser.process_line('...\n')
+        self.assertEqual(1, len(parser._tokens))
+        self.assertEqual('...', parser._tokens[0].data)
+        self.assertFalse(isinstance(parser._tokens[0],
+                                    picoluafmt.TokName))
+        
 
 @patch.object(picoluafmt.LuaParser, 'process_line')
 @patch.object(picoluafmt.LuaParser, 'write_formatted')

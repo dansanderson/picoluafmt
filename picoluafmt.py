@@ -34,7 +34,8 @@ class LexerError(Exception):
         self.charno = charno
         
     def __str__(self):
-        return '{} at {}'.format(self.msg, self.pos)
+        return '{} at line {} char {}'.format(
+            self.msg, self.lineno, self.charno)
 
     
 STRING_ESCAPES = {
@@ -58,9 +59,9 @@ class Token():
         self.data = data
         self.lineno = lineno
         self.charno = charno
-    def __str__(self):
-        return '{}<line {} char {}, {}>'.format(
-            self.__class__.__name__, self.lineno, self.charno, self.data)
+    def __repr__(self):
+        return '{}<"{}" line {} char {}>'.format(
+            self.__class__.__name__, self.data, self.lineno, self.charno)
 
     
 class TokString(Token):
@@ -87,27 +88,26 @@ class TokName(Token):
 # classes. A token class of None causes the lexer to consume the pattern
 # without emitting a token. The patterns are matched in order, and must
 # appear in order of preference.
-TOKEN_MATCHERS = [
+TOKEN_MATCHERS = []
+TOKEN_MATCHERS.extend([
     (re.compile(r'--.*'), TokComment),
-    (re.compile(r'\w+'), None),
-    (re.compile(r'[a-zA-Z_][a-zA-Z0-9_]*'), TokName),
-    (re.compile(r'0[xX][0-9a-fA-F]+'), TokNumber),
-    (re.compile(r'[0-9]*(\.[0-9]+)?([eE]-?[0-9]+)?'), TokNumber)
-]
-
-# Token literals, as a list of regexp-able strings (with regexp characters
-# escaped). These are added to the end of TOKEN_MATCHERS.
-TOKEN_STRINGS = [
+    (re.compile(r'\s+'), None)
+])
+TOKEN_MATCHERS.extend([
+    (re.compile(r'\b'+keyword+r'\b'), Token) for keyword in [
     'and', 'break', 'do', 'else', 'elseif', 'end', 'false', 'for',
     'function', 'if', 'in', 'local', 'nil', 'not', 'or', 'repeat', 'return',
-    'then', 'true', 'until', 'while',
-    r'\+', '-', r'\*', '/', '%', '^', '#',
+    'then', 'true', 'until', 'while']])
+TOKEN_MATCHERS.extend([
+    (re.compile(symbol), Token) for symbol in [
+    r'\+', '-', r'\*', '/', '%', r'\^', '#',
     '==', '~=', '!=', '<=', '>=', '<', '>', '=',
     r'\(', r'\)', '{', '}', r'\[', r'\]', ';', ':', ',',
-    r'\.\.\.', r'\.\.', r'\.'
-]
-for token_string in TOKEN_STRINGS:
-    TOKEN_MATCHERS.append((re.compile(token_string), Token))
+    r'\.\.\.', r'\.\.', r'\.']])
+TOKEN_MATCHERS.extend([
+    (re.compile(r'[a-zA-Z_][a-zA-Z0-9_]*'), TokName),
+    (re.compile(r'0[xX][0-9a-fA-F]+'), TokNumber),
+    (re.compile(r'[0-9]+(\.[0-9]+)?([eE]-?[0-9]+)?'), TokNumber)])
 
     
 class LuaParser():
@@ -150,7 +150,7 @@ class LuaParser():
         """
         i = 0
         
-        if self.in_string is not None:
+        if self._in_string is not None:
             # Continue string literal.
             while i < len(s):
                 c = s[i]
@@ -197,10 +197,10 @@ class LuaParser():
                 m = pat.match(s)
                 if m:
                     if tok_class is not None:
-                        self._tokens.append(
-                            tok_class(m.group(0),
-                                      self._cur_lineno,
-                                      self._cur_charno))
+                        token = tok_class(m.group(0),
+                                          self._cur_lineno,
+                                          self._cur_charno)
+                        self._tokens.append(token)
                     i = len(m.group(0))
                     break
 
@@ -227,9 +227,9 @@ class LuaParser():
             i = self._process_token(line)
             line = line[i:]
         if line:
-            raise LexerError('Syntax error',
-                             self._cur_lineno,
-                             self._cur_charno)
+            raise LexerError('Syntax error (remaining:%r)' % (line,),
+                             self._cur_lineno + 1,
+                             self._cur_charno + 1)
 
     def write_minified(self, outstr):
         """Writes a minified version of the processed Lua source to an output
