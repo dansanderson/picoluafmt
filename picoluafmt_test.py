@@ -204,9 +204,66 @@ class TestLuaParser(unittest.TestCase):
         parser = picoluafmt.LuaParser()
         parser.process_line('"\\\n\\a\\b\\f\\n\\r\\t\\v\\\\\\"\\\'"\n')
         self.assertEqual(1, len(parser._tokens))
-        self.assertEqual('\n\a\b\f\n\r\t\v\\"\'', parser._tokens[0].data)
-        self.assertTrue(isinstance(parser._tokens[0],
-                                   picoluafmt.TokString))
+        self.assertEqual(picoluafmt.TokString('\n\a\b\f\n\r\t\v\\"\''),
+                         parser._tokens[0])
+
+    def testLexerComment(self):
+        parser = picoluafmt.LuaParser()
+        parser.process_line('-- comment text and stuff\n')
+        self.assertEqual(1, len(parser._tokens))
+        self.assertEqual(picoluafmt.TokComment('-- comment text and stuff'),
+                         parser._tokens[0])
+        
+    def testLexerTokenAndComment(self):
+        parser = picoluafmt.LuaParser()
+        parser.process_line('and-- comment text and stuff\n')
+        self.assertEqual(2, len(parser._tokens))
+        self.assertEqual(picoluafmt.TokKeyword('and'),
+                         parser._tokens[0])
+        self.assertEqual(picoluafmt.TokComment('-- comment text and stuff'),
+                         parser._tokens[1])
+        
+    def testLexerNumberInteger(self):
+        parser = picoluafmt.LuaParser()
+        parser.process_line('1234567890\n')
+        self.assertEqual(1, len(parser._tokens))
+        self.assertEqual(picoluafmt.TokNumber('1234567890'),
+                         parser._tokens[0])
+
+    def testLexerNumberHex(self):
+        parser = picoluafmt.LuaParser()
+        parser.process_line('0x1234567890abcdef\n')
+        self.assertEqual(1, len(parser._tokens))
+        self.assertEqual(picoluafmt.TokNumber('0x1234567890abcdef'),
+                         parser._tokens[0])
+
+    def testLexerNumberDecimal(self):
+        parser = picoluafmt.LuaParser()
+        parser.process_line('1.234567890\n')
+        self.assertEqual(1, len(parser._tokens))
+        self.assertEqual(picoluafmt.TokNumber('1.234567890'),
+                         parser._tokens[0])
+
+    def testLexerNumberDecimalWithExp(self):
+        parser = picoluafmt.LuaParser()
+        parser.process_line('1.234567890e-6\n')
+        self.assertEqual(1, len(parser._tokens))
+        self.assertEqual(picoluafmt.TokNumber('1.234567890e-6'),
+                         parser._tokens[0])
+        
+    def testLexerNegatedNumber(self):
+        parser = picoluafmt.LuaParser()
+        parser.process_line('-1.234567890e-6\n')
+        self.assertEqual(2, len(parser._tokens))
+        self.assertEqual(picoluafmt.TokKeyword('-'),
+                         parser._tokens[0])
+        self.assertEqual(picoluafmt.TokNumber('1.234567890e-6'),
+                         parser._tokens[1])
+
+    def testLexerValidLua(self):
+        parser = picoluafmt.LuaParser()
+        for line in VALID_LUA.split('\n'):
+            parser.process_line(line)
 
 
 @patch.object(picoluafmt.LuaParser, 'process_line')
