@@ -7,6 +7,7 @@ Limitations:
 
 To do:
 
+* Confirm Lua and Pico-8 behavior on multi-line strings.
 * Implement formatted output.
 * Implement minified output.
 * Line length limiting and smart wrapping.
@@ -39,29 +40,26 @@ class LexerError(Exception):
 
     
 STRING_ESCAPES = {
-    '\n': '\n',
-    'a': '\a',
-    'b': '\b',
-    'f': '\f',
-    'n': '\n',
-    'r': '\r',
-    't': '\t',
-    'v': '\v',
-    '\\': '\\',
-    '"': '"',
+    '\n': '\n', 'a': '\a', 'b': '\b', 'f': '\f', 'n': '\n',
+    'r': '\r', 't': '\t', 'v': '\v', '\\': '\\', '"': '"',
     "'": "'"
 }
 
 
 class Token():
     """A token."""
-    def __init__(self, data, lineno, charno):
+    def __init__(self, data, lineno=None, charno=None):
         self.data = data
         self.lineno = lineno
         self.charno = charno
+
     def __repr__(self):
         return '{}<"{}" line {} char {}>'.format(
             self.__class__.__name__, self.data, self.lineno, self.charno)
+
+    def __eq__(self, other):
+        return ((self.__class__ == other.__class__) and
+                (self.data == other.data))
 
     
 class TokString(Token):
@@ -84,6 +82,11 @@ class TokName(Token):
     pass
 
 
+class TokKeyword(Token):
+    """A name."""
+    pass
+
+
 # A list of single-line token matching patterns and corresponding token
 # classes. A token class of None causes the lexer to consume the pattern
 # without emitting a token. The patterns are matched in order, and must
@@ -94,12 +97,12 @@ TOKEN_MATCHERS.extend([
     (re.compile(r'\s+'), None)
 ])
 TOKEN_MATCHERS.extend([
-    (re.compile(r'\b'+keyword+r'\b'), Token) for keyword in [
+    (re.compile(r'\b'+keyword+r'\b'), TokKeyword) for keyword in [
     'and', 'break', 'do', 'else', 'elseif', 'end', 'false', 'for',
     'function', 'if', 'in', 'local', 'nil', 'not', 'or', 'repeat', 'return',
     'then', 'true', 'until', 'while']])
 TOKEN_MATCHERS.extend([
-    (re.compile(symbol), Token) for symbol in [
+    (re.compile(symbol), TokKeyword) for symbol in [
     r'\+', '-', r'\*', '/', '%', r'\^', '#',
     '==', '~=', '!=', '<=', '>=', '<', '>', '=',
     r'\(', r'\)', '{', '}', r'\[', r'\]', ';', ':', ',',

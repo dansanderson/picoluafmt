@@ -155,26 +155,58 @@ class TestLuaParser(unittest.TestCase):
         parser = picoluafmt.LuaParser()
         parser.process_line('and\n')
         self.assertEqual(1, len(parser._tokens))
-        self.assertEqual('and', parser._tokens[0].data)
-        self.assertFalse(isinstance(parser._tokens[0],
-                                    picoluafmt.TokName))
+        self.assertEqual(picoluafmt.TokKeyword('and'), parser._tokens[0])
 
     def testLexerOneName(self):
         parser = picoluafmt.LuaParser()
         parser.process_line('android\n')
         self.assertEqual(1, len(parser._tokens))
-        self.assertEqual('android', parser._tokens[0].data)
-        self.assertTrue(isinstance(parser._tokens[0],
-                                   picoluafmt.TokName))
+        self.assertEqual(picoluafmt.TokName('android'), parser._tokens[0])
 
     def testLexerThreeDots(self):
         parser = picoluafmt.LuaParser()
         parser.process_line('...\n')
         self.assertEqual(1, len(parser._tokens))
-        self.assertEqual('...', parser._tokens[0].data)
-        self.assertFalse(isinstance(parser._tokens[0],
-                                    picoluafmt.TokName))
+        self.assertEqual(picoluafmt.TokKeyword('...'), parser._tokens[0])
+
+    def testLexerStringDoubleQuotes(self):
+        parser = picoluafmt.LuaParser()
+        parser.process_line('"abc def ghi and jkl"\n')
+        self.assertEqual(1, len(parser._tokens))
+        self.assertEqual(picoluafmt.TokString('abc def ghi and jkl'),
+                         parser._tokens[0])
+
+    def testLexerStringSingleQuotes(self):
+        parser = picoluafmt.LuaParser()
+        parser.process_line("'abc def ghi and jkl'\n")
+        self.assertEqual(1, len(parser._tokens))
+        self.assertEqual(picoluafmt.TokString('abc def ghi and jkl'),
+                         parser._tokens[0])
+
+    # TODO: confirm the correct multi-line string behavior
+    def testLexerStringMultipleLines(self):
+        parser = picoluafmt.LuaParser()
+        parser.process_line('"abc def ghi \nand jkl"\n')
+        self.assertEqual(1, len(parser._tokens))
+        self.assertEqual(picoluafmt.TokString('abc def ghi \nand jkl'),
+                         parser._tokens[0])
         
+    def testLexerStringMultipleLinesPlusAToken(self):
+        parser = picoluafmt.LuaParser()
+        parser.process_line('"abc def ghi \nand jkl" and\n')
+        self.assertEqual(2, len(parser._tokens))
+        self.assertEqual(picoluafmt.TokString('abc def ghi \nand jkl'),
+                         parser._tokens[0])
+        self.assertEqual(picoluafmt.TokKeyword('and'), parser._tokens[1])
+
+    def testLexerStringEscapes(self):
+        parser = picoluafmt.LuaParser()
+        parser.process_line('"\\\n\\a\\b\\f\\n\\r\\t\\v\\\\\\"\\\'"\n')
+        self.assertEqual(1, len(parser._tokens))
+        self.assertEqual('\n\a\b\f\n\r\t\v\\"\'', parser._tokens[0].data)
+        self.assertTrue(isinstance(parser._tokens[0],
+                                   picoluafmt.TokString))
+
 
 @patch.object(picoluafmt.LuaParser, 'process_line')
 @patch.object(picoluafmt.LuaParser, 'write_formatted')
