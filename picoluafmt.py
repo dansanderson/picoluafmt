@@ -1,4 +1,17 @@
 #!/usr/bin/env python3
+"""
+
+Limitations:
+
+* Does not support Lua long strings.
+
+To do:
+
+* Implement formatted output.
+* Implement minified output.
+* Line length limiting and smart wrapping.
+"""
+
 
 import argparse
 import os
@@ -12,35 +25,18 @@ class Error(Exception):
     """Base class for local exceptions."""
     pass
 
-class Pos():
-    def __init__(self, lineno=0, charno=0):
-        self.lineno = lineno
-        self.charno = charno
-
-    def next(self, chars):
-        for char in chars:
-            if char == '\n':
-                self.lineno += 1
-                self.charno = -1
-            else:
-                self.charno += 1
-        return chars
-
-    def copy(self):
-        return Pos(lineno=self.lineno, charno=self.charno)
-            
-    def __str__(self):
-        return 'line {}, pos {}'.format(self.lineno+1, self.charno+1)
 
 class LexerError(Exception):
     """A lexer error."""
-    def __init__(self, msg, pos):
+    def __init__(self, msg, lineno, charno):
         self.msg = msg
-        self.pos = pos
+        self.lineno = lineno
+        self.charno = charno
         
     def __str__(self):
         return '{} at {}'.format(self.msg, self.pos)
 
+    
 STRING_ESCAPES = {
     '\n': '\n',
     'a': '\a',
@@ -55,33 +51,65 @@ STRING_ESCAPES = {
     "'": "'"
 }
 
-class Token():
-    """Base class for tokens."""
-    def __init__(self, pos, data):
-        self.pos = pos
-        self.data = data
-    def __str__(self):
-        return '{}<{}, {}>'.format(
-            self.__class__.__name__, self.pos, self.data)
 
+class Token():
+    """A token."""
+    def __init__(self, data, lineno, charno):
+        self.data = data
+        self.lineno = lineno
+        self.charno = charno
+    def __str__(self):
+        return '{}<line {} char {}, {}>'.format(
+            self.__class__.__name__, self.lineno, self.charno, self.data)
+
+    
 class TokString(Token):
     """A string literal."""
     pass
+
+
+class TokNumber(Token):
+    """A string literal."""
+    pass
+
 
 class TokComment(Token):
     """A comment."""
     pass
 
+
 class TokName(Token):
     """A name."""
     pass
 
-TOKEN_MATCHERS = (
+
+# A list of single-line token matching patterns and corresponding token
+# classes. A token class of None causes the lexer to consume the pattern
+# without emitting a token. The patterns are matched in order, and must
+# appear in order of preference.
+TOKEN_MATCHERS = [
     (re.compile(r'--.*'), TokComment),
     (re.compile(r'\w+'), None),
-    (re.compile(r'[a-zA-Z_][a-zA-Z0-9_]*'), TokName)
-)
+    (re.compile(r'[a-zA-Z_][a-zA-Z0-9_]*'), TokName),
+    (re.compile(r'0[xX][0-9a-fA-F]+'), TokNumber),
+    (re.compile(r'[0-9]*(\.[0-9]+)?([eE]-?[0-9]+)?'), TokNumber)
+]
 
+# Token literals, as a list of regexp-able strings (with regexp characters
+# escaped). These are added to the end of TOKEN_MATCHERS.
+TOKEN_STRINGS = [
+    'and', 'break', 'do', 'else', 'elseif', 'end', 'false', 'for',
+    'function', 'if', 'in', 'local', 'nil', 'not', 'or', 'repeat', 'return',
+    'then', 'true', 'until', 'while',
+    r'\+', '-', r'\*', '/', '%', '^', '#',
+    '==', '~=', '!=', '<=', '>=', '<', '>', '=',
+    r'\(', r'\)', '{', '}', r'\[', r'\]', ';', ':', ',',
+    r'\.\.\.', r'\.\.', r'\.'
+]
+for token_string in TOKEN_STRINGS:
+    TOKEN_MATCHERS.append((re.compile(token_string), Token))
+
+    
 class LuaParser():
     """The Lua parser and formatter.
 
@@ -96,11 +124,13 @@ class LuaParser():
     def __init__(self):
         """The initializer."""
         self._tokens = []
-        self._tokenpos = Pos()
+        self._cur_lineno = 0
+        self._cur_charno = 0
 
         # If in a string literal, the pos of the start of the string.
-        self._in_string_pos = None
-        # If in a string literal, a list of (escaped) chars. Else None.
+        self._in_string_lineno = None
+        self._in_string_charno = None
+        # If in a string literal, a list of chars. Else None.
         self._in_string = None
         # If in a string literal, the starting delimiter, either " or '.
         # Else None.
@@ -128,10 +158,12 @@ class LuaParser():
                 if c == self._in_string_delim:
                     # End string literal.
                     self._tokens.append(
-                        TokString(self._in_string_pos,
-                                  str(''.join(self._in_string))))
+                        TokString(str(''.join(self._in_string)),
+                                  self._in_string_lineno,
+                                  self._in_string_charno))
                     self._in_string_delim = None
-                    self._in_string_pos = None
+                    self._in_string_lineno = None
+                    self._in_string_charno = None
                     self._in_string = None
                     i += 1
                     break
@@ -154,7 +186,8 @@ class LuaParser():
         elif s.startswith("'") or s.startswith('"'):
             # Begin string literal.
             self._in_string_delim = s[0]
-            self._in_string_pos = self._tokenpos.copy()
+            self._in_string_lineno = self._cur_lineno
+            self._in_string_charno = self._cur_charno
             self._in_string = []
             i = 1
 
@@ -165,11 +198,18 @@ class LuaParser():
                 if m:
                     if tok_class is not None:
                         self._tokens.append(
-                            tok_class(self._tokenpos, m.group(0)))
+                            tok_class(m.group(0),
+                                      self._cur_lineno,
+                                      self._cur_charno))
                     i = len(m.group(0))
                     break
-           
-        self._tokenpos.next(s[:i])
+
+        for c in s[:i]:
+            if c == '\n':
+                self._cur_lineno += 1
+                self._cur_charno = 0
+            else:
+                self._cur_charno += 1
         return i
 
     def process_line(self, line):
@@ -187,7 +227,9 @@ class LuaParser():
             i = self._process_token(line)
             line = line[i:]
         if line:
-            raise LexerError('Syntax error', self._tokenpos)
+            raise LexerError('Syntax error',
+                             self._cur_lineno,
+                             self._cur_charno)
 
     def write_minified(self, outstr):
         """Writes a minified version of the processed Lua source to an output

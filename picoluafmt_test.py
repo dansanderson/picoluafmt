@@ -156,7 +156,9 @@ class TestLuaParser(unittest.TestCase):
 @patch.object(picoluafmt.LuaParser, 'write_formatted')
 @patch.object(picoluafmt.LuaParser, 'write_minified')
 class TestProcessStream(unittest.TestCase):
-    def testProcessEmptyLua(self, mock_write_minified, mock_write_formatted, mock_process_line):
+    def testProcessEmptyLua(
+            self, mock_write_minified,
+            mock_write_formatted, mock_process_line):
         outstr = io.StringIO()
         (oc, nc) = picoluafmt.process(
             io.StringIO(''),
@@ -167,7 +169,9 @@ class TestProcessStream(unittest.TestCase):
             outstr, indent_width=2)
         mock_write_minified.assert_not_called()
 
-    def testProcessLua(self, mock_write_minified, mock_write_formatted, mock_process_line):
+    def testProcessLua(
+            self, mock_write_minified,
+            mock_write_formatted, mock_process_line):
         outstr = io.StringIO()
         (oc, nc) = picoluafmt.process(
             io.StringIO(VALID_LUA),
@@ -178,7 +182,9 @@ class TestProcessStream(unittest.TestCase):
             outstr, indent_width=2)
         mock_write_minified.assert_not_called()
         
-    def testProcessLuaMinify(self, mock_write_minified, mock_write_formatted, mock_process_line):
+    def testProcessLuaMinify(
+            self, mock_write_minified,
+            mock_write_formatted, mock_process_line):
         outstr = io.StringIO()
         (oc, nc) = picoluafmt.process(
             io.StringIO(VALID_LUA),
@@ -190,7 +196,9 @@ class TestProcessStream(unittest.TestCase):
             outstr)
         mock_write_formatted.assert_not_called()
         
-    def testProcessLuaIndentWidth(self, mock_write_minified, mock_write_formatted, mock_process_line):
+    def testProcessLuaIndentWidth(
+            self, mock_write_minified,
+            mock_write_formatted, mock_process_line):
         outstr = io.StringIO()
         (oc, nc) = picoluafmt.process(
             io.StringIO(VALID_LUA),
@@ -202,7 +210,9 @@ class TestProcessStream(unittest.TestCase):
             outstr, indent_width=7)
         mock_write_minified.assert_not_called()
         
-    def testProcessP8EmptyLua(self, mock_write_minified, mock_write_formatted, mock_process_line):
+    def testProcessP8EmptyLua(
+            self, mock_write_minified,
+            mock_write_formatted, mock_process_line):
         outstr = io.StringIO()
         (oc, nc) = picoluafmt.process(
             io.StringIO(VALID_P8_HEADER +
@@ -216,7 +226,9 @@ class TestProcessStream(unittest.TestCase):
         mock_write_minified.assert_not_called()
         self.assertIn('__gfx__\n', outstr.getvalue())
 
-    def testProcessP8(self, mock_write_minified, mock_write_formatted, mock_process_line):
+    def testProcessP8(
+            self, mock_write_minified,
+            mock_write_formatted, mock_process_line):
         outstr = io.StringIO()
         (oc, nc) = picoluafmt.process(
             io.StringIO(VALID_P8_HEADER +
@@ -231,7 +243,9 @@ class TestProcessStream(unittest.TestCase):
         mock_write_minified.assert_not_called()
         self.assertIn('__gfx__\n', outstr.getvalue())
         
-    def testErrorP8InvalidHeader(self, mock_write_minified, mock_write_formatted, mock_process_line):
+    def testErrorP8InvalidHeader(
+            self, mock_write_minified,
+            mock_write_formatted, mock_process_line):
         outstr = io.StringIO()
         self.assertRaises(
             picoluafmt.BadP8Error,
@@ -244,7 +258,9 @@ class TestProcessStream(unittest.TestCase):
             expect_p8=True
         )
         
-    def testErrorP8MissingLua(self, mock_write_minified, mock_write_formatted, mock_process_line):
+    def testErrorP8MissingLua(
+            self, mock_write_minified,
+            mock_write_formatted, mock_process_line):
         outstr = io.StringIO()
         self.assertRaises(
             picoluafmt.BadP8Error,
@@ -254,6 +270,7 @@ class TestProcessStream(unittest.TestCase):
             outstr,
             expect_p8=True
         )
+
 
 @patch('picoluafmt.process', return_value=(111, 222))
 @patch('picoluafmt.write')
